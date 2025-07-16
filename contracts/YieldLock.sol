@@ -193,3 +193,17 @@ contract YieldLock is ReentrancyGuard, Ownable {
         pool.lastUpdateTime = block.timestamp;
     }
 }
+function setFarmPoolParams(
+    uint256 poolId,
+    uint256 newRewardRate,
+    uint256 newLockDuration
+) external onlyOwner {
+    FarmPool storage pool = farmPools[poolId];
+    require(pool.isActive, "Pool not active");
+    require(newRewardRate > 0, "Reward rate must be greater than 0");
+
+    updatePoolReward(poolId); // Update rewards before changes
+
+    pool.rewardRate = newRewardRate;
+    pool.lockDuration = newLockDuration;
+}
