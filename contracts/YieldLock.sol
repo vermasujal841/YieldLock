@@ -207,3 +207,19 @@ function setFarmPoolParams(
     pool.rewardRate = newRewardRate;
     pool.lockDuration = newLockDuration;
 }
+
+    function setFarmPoolParams(
+        uint256 poolId,
+        uint256 newRewardRate,
+        uint256 newLockDuration
+    ) external onlyOwner {
+        FarmPool storage pool = farmPools[poolId];
+        require(pool.isActive, "Pool not active");
+        require(newRewardRate > 0, "Reward rate must be greater than 0");
+
+        updatePoolReward(poolId); // Update rewards before changing parameters
+
+        pool.rewardRate = newRewardRate;
+        pool.lockDuration = newLockDuration;
+    }
+}
