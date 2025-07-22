@@ -194,9 +194,5 @@ contract YieldLock is ReentrancyGuard, Ownable {
             (((block.timestamp - pool.lastUpdateTime) * pool.rewardRate * 1e18) / pool.totalStaked);
     }
 
-    function updatePoolReward(uint256 poolId) internal {
-        FarmPool storage pool = farmPools[poolId];
-        pool.rewardPerTokenStored = rewardPerToken(poolId);
-        pool.lastUpdateTime = block.timestamp;
-    }
+
 }
