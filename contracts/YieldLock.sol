@@ -193,6 +193,46 @@ contract YieldLock is ReentrancyGuard, Ownable {
         return pool.rewardPerTokenStored +
             (((block.timestamp - pool.lastUpdateTime) * pool.rewardRate * 1e18) / pool.totalStaked);
     }
+function getActiveVestingSchedules(address user) external view returns (
+    uint256[] memory ids,
+    uint256[] memory totalAmounts,
+    uint256[] memory claimedAmounts,
+    uint256[] memory claimableNow,
+    uint256[] memory timeRemaining
+) {
+    uint256 count = userVestingCount[user];
+    uint256 activeCount;
+
+    // First pass: count active
+    for (uint256 i = 0; i < count; i++) {
+        if (vestingSchedules[user][i].isActive) {
+            activeCount++;
+        }
+    }
+
+    // Initialize arrays
+    ids = new uint256[](activeCount);
+    totalAmounts = new uint256[](activeCount);
+    claimedAmounts = new uint256[](activeCount);
+    claimableNow = new uint256[](activeCount);
+    timeRemaining = new uint256[](activeCount);
+
+    // Second pass: fill data
+    uint256 index;
+    for (uint256 i = 0; i < count; i++) {
+        VestingSchedule storage vs = vestingSchedules[user][i];
+        if (vs.isActive) {
+            ids[index] = i;
+            totalAmounts[index] = vs.totalAmount;
+            claimedAmounts[index] = vs.claimedAmount;
+            claimableNow[index] = calculateVestedAmount(user, i);
+            uint256 end = vs.startTime + vs.vestingDuration;
+            timeRemaining[index] = block.timestamp >= end ? 0 : end - block.timestamp;
+            index++;
+        }
+    }
+}
+
 
 
 }
