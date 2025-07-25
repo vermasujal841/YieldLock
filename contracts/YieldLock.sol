@@ -6,236 +6,235 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract YieldLock is ReentrancyGuard, Ownable {
-    IERC20 public stakingToken;
-    IERC20 public rewardToken;
+    IERC20 public immutable stakingToken;
+    IERC20 public immutable rewardToken;
 
     struct VestingSchedule {
         uint256 totalAmount;
         uint256 claimedAmount;
         uint256 startTime;
-        uint256 cliffDuration;
-        uint256 vestingDuration;
+        uint256 cliff;
+        uint256 duration;
         bool isActive;
     }
 
     struct FarmPool {
-        IERC20 lpToken;
+        IERC20 stakingToken;
         uint256 totalStaked;
         uint256 rewardRate;
-        uint256 lastUpdateTime;
+        uint256 lastUpdated;
         uint256 rewardPerTokenStored;
         uint256 lockDuration;
         bool isActive;
     }
 
     struct UserStake {
-        uint256 amount;
+        uint256 stakedAmount;
         uint256 rewardDebt;
-        uint256 lockEndTime;
-        uint256 vestingScheduleId;
+        uint256 unlockTime;
+        uint256 vestingId;
     }
 
-    mapping(uint256 => FarmPool) public farmPools;
+    uint256 public poolCount;
+
+    mapping(uint256 => FarmPool) public pools;
     mapping(uint256 => mapping(address => UserStake)) public userStakes;
-    mapping(address => mapping(uint256 => VestingSchedule)) public vestingSchedules;
-    mapping(address => uint256) public userVestingCount;
+    mapping(address => mapping(uint256 => VestingSchedule)) public vestings;
+    mapping(address => uint256) public vestingCounter;
 
-    uint256 public poolCounter;
-
-    event PoolCreated(uint256 indexed poolId, address lpToken, uint256 rewardRate, uint256 lockDuration);
+    event PoolCreated(uint256 indexed poolId, address indexed token, uint256 rewardRate, uint256 lockDuration);
     event Staked(uint256 indexed poolId, address indexed user, uint256 amount);
     event Unstaked(uint256 indexed poolId, address indexed user, uint256 amount);
-    event VestingScheduleCreated(address indexed beneficiary, uint256 vestingId, uint256 amount);
-    event TokensVested(address indexed beneficiary, uint256 vestingId, uint256 amount);
+    event VestingCreated(address indexed user, uint256 vestingId, uint256 amount);
+    event TokensClaimed(address indexed user, uint256 vestingId, uint256 amount);
 
     constructor(address _stakingToken, address _rewardToken) Ownable(msg.sender) {
         stakingToken = IERC20(_stakingToken);
         rewardToken = IERC20(_rewardToken);
     }
 
-    function createFarmPool(address lpToken, uint256 rewardRate, uint256 lockDuration) external onlyOwner {
-        require(lpToken != address(0), "Invalid LP token address");
-        require(rewardRate > 0, "Reward rate must be greater than 0");
+    // --- Pool Management ---
 
-        poolCounter++;
-        farmPools[poolCounter] = FarmPool({
-            lpToken: IERC20(lpToken),
+    function createPool(address token, uint256 rewardRate, uint256 lockDuration) external onlyOwner {
+        require(token != address(0), "Invalid token");
+        require(rewardRate > 0, "Zero reward");
+
+        poolCount++;
+        pools[poolCount] = FarmPool({
+            stakingToken: IERC20(token),
             totalStaked: 0,
             rewardRate: rewardRate,
-            lastUpdateTime: block.timestamp,
+            lastUpdated: block.timestamp,
             rewardPerTokenStored: 0,
             lockDuration: lockDuration,
             isActive: true
         });
 
-        emit PoolCreated(poolCounter, lpToken, rewardRate, lockDuration);
+        emit PoolCreated(poolCount, token, rewardRate, lockDuration);
     }
 
-    function setFarmPoolParams(uint256 poolId, uint256 newRewardRate, uint256 newLockDuration) external onlyOwner {
-        FarmPool storage pool = farmPools[poolId];
-        require(pool.isActive, "Pool not active");
-        require(newRewardRate > 0, "Reward rate must be greater than 0");
+    function updatePool(uint256 poolId, uint256 newRate, uint256 newLock) external onlyOwner {
+        FarmPool storage pool = pools[poolId];
+        require(pool.isActive, "Inactive pool");
+        require(newRate > 0, "Zero rate");
 
-        updatePoolReward(poolId);
-        pool.rewardRate = newRewardRate;
-        pool.lockDuration = newLockDuration;
+        _updatePool(poolId);
+        pool.rewardRate = newRate;
+        pool.lockDuration = newLock;
     }
 
-    function stakeLiquidity(uint256 poolId, uint256 amount) external nonReentrant {
-        require(amount > 0, "Amount must be greater than 0");
+    // --- Staking ---
 
-        FarmPool storage pool = farmPools[poolId];
-        require(pool.isActive, "Pool not active");
+    function stake(uint256 poolId, uint256 amount) external nonReentrant {
+        require(amount > 0, "Zero stake");
+        FarmPool storage pool = pools[poolId];
+        require(pool.isActive, "Inactive pool");
 
-        updatePoolReward(poolId);
+        _updatePool(poolId);
 
-        UserStake storage userStake = userStakes[poolId][msg.sender];
-
-        userStake.amount += amount;
-        userStake.lockEndTime = block.timestamp + pool.lockDuration;
-        userStake.rewardDebt = (userStake.amount * pool.rewardPerTokenStored) / 1e18;
+        UserStake storage stakeData = userStakes[poolId][msg.sender];
+        stakeData.stakedAmount += amount;
+        stakeData.unlockTime = block.timestamp + pool.lockDuration;
+        stakeData.rewardDebt = (stakeData.stakedAmount * pool.rewardPerTokenStored) / 1e18;
 
         pool.totalStaked += amount;
 
-        require(pool.lpToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(pool.stakingToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
 
         emit Staked(poolId, msg.sender, amount);
     }
 
-    function unstakeLiquidity(uint256 poolId, uint256 amount) external nonReentrant {
-        FarmPool storage pool = farmPools[poolId];
-        UserStake storage userStake = userStakes[poolId][msg.sender];
+    function unstake(uint256 poolId, uint256 amount) external nonReentrant {
+        FarmPool storage pool = pools[poolId];
+        UserStake storage stakeData = userStakes[poolId][msg.sender];
 
-        require(userStake.amount >= amount, "Insufficient staked amount");
-        require(block.timestamp >= userStake.lockEndTime, "Tokens still locked");
+        require(stakeData.stakedAmount >= amount, "Too much");
+        require(block.timestamp >= stakeData.unlockTime, "Locked");
 
-        updatePoolReward(poolId);
+        _updatePool(poolId);
 
-        uint256 pendingRewards = earned(poolId, msg.sender);
-        if (pendingRewards > 0) {
-            createVestingSchedule(msg.sender, pendingRewards);
+        uint256 rewards = _earned(poolId, msg.sender);
+        if (rewards > 0) {
+            _startVesting(msg.sender, rewards);
         }
 
-        userStake.amount -= amount;
+        stakeData.stakedAmount -= amount;
+        stakeData.rewardDebt = (stakeData.stakedAmount * pool.rewardPerTokenStored) / 1e18;
         pool.totalStaked -= amount;
-        userStake.rewardDebt = (userStake.amount * pool.rewardPerTokenStored) / 1e18;
 
-        require(pool.lpToken.transfer(msg.sender, amount), "Transfer failed");
+        require(pool.stakingToken.transfer(msg.sender, amount), "Transfer failed");
 
         emit Unstaked(poolId, msg.sender, amount);
     }
 
-    function createVestingSchedule(address beneficiary, uint256 amount) internal {
-        uint256 vestingId = userVestingCount[beneficiary]++;
-        vestingSchedules[beneficiary][vestingId] = VestingSchedule({
+    // --- Vesting ---
+
+    function claimVested(uint256 vestingId) external nonReentrant {
+        VestingSchedule storage vs = vestings[msg.sender][vestingId];
+        require(vs.isActive, "Inactive vesting");
+
+        uint256 claimable = _vestedAmount(msg.sender, vestingId);
+        require(claimable > 0, "Nothing to claim");
+
+        vs.claimedAmount += claimable;
+        if (vs.claimedAmount >= vs.totalAmount) {
+            vs.isActive = false;
+        }
+
+        require(rewardToken.transfer(msg.sender, claimable), "Transfer failed");
+        emit TokensClaimed(msg.sender, vestingId, claimable);
+    }
+
+    function _startVesting(address user, uint256 amount) internal {
+        uint256 id = vestingCounter[user]++;
+        vestings[user][id] = VestingSchedule({
             totalAmount: amount,
             claimedAmount: 0,
             startTime: block.timestamp,
-            cliffDuration: 30 days,
-            vestingDuration: 180 days,
+            cliff: 30 days,
+            duration: 180 days,
             isActive: true
         });
 
-        emit VestingScheduleCreated(beneficiary, vestingId, amount);
+        emit VestingCreated(user, id, amount);
     }
 
-    function claimVestedTokens(uint256 vestingId) external nonReentrant {
-        VestingSchedule storage schedule = vestingSchedules[msg.sender][vestingId];
-        require(schedule.isActive, "Vesting not active");
+    function _vestedAmount(address user, uint256 id) public view returns (uint256) {
+        VestingSchedule storage vs = vestings[user][id];
 
-        uint256 claimableAmount = calculateVestedAmount(msg.sender, vestingId);
-        require(claimableAmount > 0, "Nothing to claim");
-
-        schedule.claimedAmount += claimableAmount;
-
-        if (schedule.claimedAmount >= schedule.totalAmount) {
-            schedule.isActive = false;
-        }
-
-        require(rewardToken.transfer(msg.sender, claimableAmount), "Transfer failed");
-
-        emit TokensVested(msg.sender, vestingId, claimableAmount);
-    }
-
-    function calculateVestedAmount(address beneficiary, uint256 vestingId) public view returns (uint256) {
-        VestingSchedule storage schedule = vestingSchedules[beneficiary][vestingId];
-
-        if (block.timestamp < schedule.startTime + schedule.cliffDuration) {
+        if (block.timestamp < vs.startTime + vs.cliff) {
             return 0;
         }
 
-        uint256 timeElapsed = block.timestamp - schedule.startTime;
-
-        if (timeElapsed >= schedule.vestingDuration) {
-            return schedule.totalAmount - schedule.claimedAmount;
+        uint256 elapsed = block.timestamp - vs.startTime;
+        if (elapsed >= vs.duration) {
+            return vs.totalAmount - vs.claimedAmount;
         }
 
-        uint256 vested = (schedule.totalAmount * timeElapsed) / schedule.vestingDuration;
-        return vested - schedule.claimedAmount;
+        uint256 totalVested = (vs.totalAmount * elapsed) / vs.duration;
+        return totalVested - vs.claimedAmount;
     }
 
-    function earned(uint256 poolId, address user) public view returns (uint256) {
-        FarmPool storage pool = farmPools[poolId];
-        UserStake storage stake = userStakes[poolId][user];
+    // --- Reward Calculation ---
 
-        uint256 currentRewardPerToken = rewardPerToken(poolId);
-        return (stake.amount * (currentRewardPerToken - stake.rewardDebt)) / 1e18;
+    function _earned(uint256 poolId, address user) public view returns (uint256) {
+        FarmPool storage pool = pools[poolId];
+        UserStake storage stakeData = userStakes[poolId][user];
+
+        uint256 newRewardPerToken = _rewardPerToken(poolId);
+        return (stakeData.stakedAmount * (newRewardPerToken - stakeData.rewardDebt)) / 1e18;
     }
 
-    function rewardPerToken(uint256 poolId) public view returns (uint256) {
-        FarmPool storage pool = farmPools[poolId];
+    function _rewardPerToken(uint256 poolId) public view returns (uint256) {
+        FarmPool storage pool = pools[poolId];
 
-        if (pool.totalStaked == 0) {
-            return pool.rewardPerTokenStored;
+        if (pool.totalStaked == 0) return pool.rewardPerTokenStored;
+
+        uint256 timeDiff = block.timestamp - pool.lastUpdated;
+        return pool.rewardPerTokenStored + (timeDiff * pool.rewardRate * 1e18) / pool.totalStaked;
+    }
+
+    function _updatePool(uint256 poolId) internal {
+        FarmPool storage pool = pools[poolId];
+
+        if (block.timestamp > pool.lastUpdated) {
+            pool.rewardPerTokenStored = _rewardPerToken(poolId);
+            pool.lastUpdated = block.timestamp;
         }
-
-        return pool.rewardPerTokenStored +
-            ((block.timestamp - pool.lastUpdateTime) * pool.rewardRate * 1e18) / pool.totalStaked;
     }
 
-    function updatePoolReward(uint256 poolId) internal {
-        FarmPool storage pool = farmPools[poolId];
+    // --- View Vesting Details ---
 
-        if (block.timestamp > pool.lastUpdateTime) {
-            pool.rewardPerTokenStored = rewardPerToken(poolId);
-            pool.lastUpdateTime = block.timestamp;
-        }
-    }
-
-    function getActiveVestingSchedules(address user) external view returns (
+    function getUserVestings(address user) external view returns (
         uint256[] memory ids,
-        uint256[] memory totalAmounts,
-        uint256[] memory claimedAmounts,
-        uint256[] memory claimableNow,
-        uint256[] memory timeRemaining
+        uint256[] memory totals,
+        uint256[] memory claimed,
+        uint256[] memory claimables,
+        uint256[] memory timeLeft
     ) {
-        uint256 count = userVestingCount[user];
-        uint256 activeCount;
+        uint256 count = vestingCounter[user];
+        uint256 active = 0;
 
         for (uint256 i = 0; i < count; i++) {
-            if (vestingSchedules[user][i].isActive) {
-                activeCount++;
-            }
+            if (vestings[user][i].isActive) active++;
         }
 
-        ids = new uint256[](activeCount);
-        totalAmounts = new uint256[](activeCount);
-        claimedAmounts = new uint256[](activeCount);
-        claimableNow = new uint256[](activeCount);
-        timeRemaining = new uint256[](activeCount);
+        ids = new uint256[](active);
+        totals = new uint256[](active);
+        claimed = new uint256[](active);
+        claimables = new uint256[](active);
+        timeLeft = new uint256[](active);
 
-        uint256 index;
+        uint256 index = 0;
         for (uint256 i = 0; i < count; i++) {
-            VestingSchedule storage vs = vestingSchedules[user][i];
+            VestingSchedule storage vs = vestings[user][i];
             if (vs.isActive) {
                 ids[index] = i;
-                totalAmounts[index] = vs.totalAmount;
-                claimedAmounts[index] = vs.claimedAmount;
-                claimableNow[index] = calculateVestedAmount(user, i);
-
-                uint256 end = vs.startTime + vs.vestingDuration;
-                timeRemaining[index] = block.timestamp >= end ? 0 : end - block.timestamp;
-
+                totals[index] = vs.totalAmount;
+                claimed[index] = vs.claimedAmount;
+                claimables[index] = _vestedAmount(user, i);
+                uint256 endTime = vs.startTime + vs.duration;
+                timeLeft[index] = block.timestamp >= endTime ? 0 : endTime - block.timestamp;
                 index++;
             }
         }
