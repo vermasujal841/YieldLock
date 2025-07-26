@@ -234,7 +234,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
                 claimed[index] = vs.claimedAmount;
                 claimables[index] = _vestedAmount(user, i);
                 uint256 endTime = vs.startTime + vs.duration;
-                timeLeft[index] = block.timestamp >= endTime ? 0 : endTime - block.timestamp;
+                timeLeft[index] = block.timestamp >= endTime?0: endTime - block.timestamp;
                 index++;
             }
         }
