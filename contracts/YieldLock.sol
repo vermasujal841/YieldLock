@@ -49,6 +49,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
     event TokensClaimed(address indexed user, uint256 vestingId, uint256 amount);
 
     constructor(address _stakingToken, address _rewardToken) Ownable(msg.sender) {
+        require(_stakingToken != address(0) && _rewardToken != address(0), "Zero address");
         stakingToken = IERC20(_stakingToken);
         rewardToken = IERC20(_rewardToken);
     }
@@ -57,7 +58,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
 
     function createPool(address token, uint256 rewardRate, uint256 lockDuration) external onlyOwner {
         require(token != address(0), "Invalid token");
-        require(rewardRate > 0, "Zero reward");
+        require(rewardRate > 0, "Reward rate must be > 0");
 
         poolCount++;
         pools[poolCount] = FarmPool({
@@ -75,8 +76,8 @@ contract YieldLock is ReentrancyGuard, Ownable {
 
     function updatePool(uint256 poolId, uint256 newRate, uint256 newLock) external onlyOwner {
         FarmPool storage pool = pools[poolId];
-        require(pool.isActive, "Inactive pool");
-        require(newRate > 0, "Zero rate");
+        require(pool.isActive, "Pool not active");
+        require(newRate > 0, "Reward rate must be > 0");
 
         _updatePool(poolId);
         pool.rewardRate = newRate;
@@ -86,30 +87,30 @@ contract YieldLock is ReentrancyGuard, Ownable {
     // --- Staking ---
 
     function stake(uint256 poolId, uint256 amount) external nonReentrant {
-        require(amount > 0, "Zero stake");
+        require(amount > 0, "Stake amount must be > 0");
+
         FarmPool storage pool = pools[poolId];
-        require(pool.isActive, "Inactive pool");
+        require(pool.isActive, "Pool not active");
 
         _updatePool(poolId);
 
-        UserStake storage stakeData = userStakes[poolId][msg.sender];
-        stakeData.stakedAmount += amount;
-        stakeData.unlockTime = block.timestamp + pool.lockDuration;
-        stakeData.rewardDebt = (stakeData.stakedAmount * pool.rewardPerTokenStored) / 1e18;
+        UserStake storage user = userStakes[poolId][msg.sender];
+        user.stakedAmount += amount;
+        user.unlockTime = block.timestamp + pool.lockDuration;
+        user.rewardDebt = (user.stakedAmount * pool.rewardPerTokenStored) / 1e18;
 
         pool.totalStaked += amount;
-
-        require(pool.stakingToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(pool.stakingToken.transferFrom(msg.sender, address(this), amount), "Stake transfer failed");
 
         emit Staked(poolId, msg.sender, amount);
     }
 
     function unstake(uint256 poolId, uint256 amount) external nonReentrant {
         FarmPool storage pool = pools[poolId];
-        UserStake storage stakeData = userStakes[poolId][msg.sender];
+        UserStake storage user = userStakes[poolId][msg.sender];
 
-        require(stakeData.stakedAmount >= amount, "Too much");
-        require(block.timestamp >= stakeData.unlockTime, "Locked");
+        require(user.stakedAmount >= amount, "Insufficient stake");
+        require(block.timestamp >= user.unlockTime, "Stake is still locked");
 
         _updatePool(poolId);
 
@@ -118,11 +119,11 @@ contract YieldLock is ReentrancyGuard, Ownable {
             _startVesting(msg.sender, rewards);
         }
 
-        stakeData.stakedAmount -= amount;
-        stakeData.rewardDebt = (stakeData.stakedAmount * pool.rewardPerTokenStored) / 1e18;
+        user.stakedAmount -= amount;
+        user.rewardDebt = (user.stakedAmount * pool.rewardPerTokenStored) / 1e18;
         pool.totalStaked -= amount;
 
-        require(pool.stakingToken.transfer(msg.sender, amount), "Transfer failed");
+        require(pool.stakingToken.transfer(msg.sender, amount), "Unstake transfer failed");
 
         emit Unstaked(poolId, msg.sender, amount);
     }
@@ -131,17 +132,18 @@ contract YieldLock is ReentrancyGuard, Ownable {
 
     function claimVested(uint256 vestingId) external nonReentrant {
         VestingSchedule storage vs = vestings[msg.sender][vestingId];
-        require(vs.isActive, "Inactive vesting");
+        require(vs.isActive, "Vesting not active");
 
         uint256 claimable = _vestedAmount(msg.sender, vestingId);
-        require(claimable > 0, "Nothing to claim");
+        require(claimable > 0, "No tokens claimable");
 
         vs.claimedAmount += claimable;
         if (vs.claimedAmount >= vs.totalAmount) {
             vs.isActive = false;
         }
 
-        require(rewardToken.transfer(msg.sender, claimable), "Transfer failed");
+        require(rewardToken.transfer(msg.sender, claimable), "Claim transfer failed");
+
         emit TokensClaimed(msg.sender, vestingId, claimable);
     }
 
@@ -161,18 +163,15 @@ contract YieldLock is ReentrancyGuard, Ownable {
 
     function _vestedAmount(address user, uint256 id) public view returns (uint256) {
         VestingSchedule storage vs = vestings[user][id];
-
-        if (block.timestamp < vs.startTime + vs.cliff) {
-            return 0;
-        }
+        if (block.timestamp < vs.startTime + vs.cliff) return 0;
 
         uint256 elapsed = block.timestamp - vs.startTime;
         if (elapsed >= vs.duration) {
             return vs.totalAmount - vs.claimedAmount;
         }
 
-        uint256 totalVested = (vs.totalAmount * elapsed) / vs.duration;
-        return totalVested - vs.claimedAmount;
+        uint256 vested = (vs.totalAmount * elapsed) / vs.duration;
+        return vested - vs.claimedAmount;
     }
 
     // --- Reward Calculation ---
@@ -187,23 +186,21 @@ contract YieldLock is ReentrancyGuard, Ownable {
 
     function _rewardPerToken(uint256 poolId) public view returns (uint256) {
         FarmPool storage pool = pools[poolId];
-
         if (pool.totalStaked == 0) return pool.rewardPerTokenStored;
 
         uint256 timeDiff = block.timestamp - pool.lastUpdated;
-        return pool.rewardPerTokenStored + (timeDiff * pool.rewardRate * 1e18) / pool.totalStaked;
+        return pool.rewardPerTokenStored + ((timeDiff * pool.rewardRate * 1e18) / pool.totalStaked);
     }
 
     function _updatePool(uint256 poolId) internal {
         FarmPool storage pool = pools[poolId];
-
         if (block.timestamp > pool.lastUpdated) {
             pool.rewardPerTokenStored = _rewardPerToken(poolId);
             pool.lastUpdated = block.timestamp;
         }
     }
 
-    // --- View Vesting Details ---
+    // --- Vesting Info View ---
 
     function getUserVestings(address user) external view returns (
         uint256[] memory ids,
@@ -234,7 +231,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
                 claimed[index] = vs.claimedAmount;
                 claimables[index] = _vestedAmount(user, i);
                 uint256 endTime = vs.startTime + vs.duration;
-                timeLeft[index] = block.timestamp >= endTime?0: endTime - block.timestamp;
+                timeLeft[index] = block.timestamp >= endTime ? 0 : endTime - block.timestamp;
                 index++;
             }
         }
