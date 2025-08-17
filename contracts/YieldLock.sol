@@ -11,7 +11,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
 
     struct VestingSchedule {
         uint256 totalAmount;
-        uint256 claimedAmount;
+        uint256 claimedAmount;   
         uint256 startTime;
         uint256 cliff;
         uint256 duration;
