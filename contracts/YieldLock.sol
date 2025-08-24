@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract YieldLock is ReentrancyGuard, Ownable {
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardToken;
-
+   
     struct VestingSchedule {
         uint256 totalAmount;
         uint256 claimedAmount;   
