@@ -10,7 +10,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
     IERC20 public immutable rewardToken;
    
     struct VestingSchedule {
-        uint256 totalAmount;
+        uint256 totalAmount;     
         uint256 claimedAmount;   
         uint256 startTime;
         uint256 cliff;
