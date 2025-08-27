@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract YieldLock is ReentrancyGuard, Ownable {
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardToken;
-   
+        
     struct VestingSchedule {
         uint256 totalAmount;     
         uint256 claimedAmount;   
@@ -27,7 +27,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         uint256 lockDuration;
         bool isActive;
     }
-
+   
     struct UserStake {
         uint256 stakedAmount;
         uint256 rewardDebt;
@@ -60,7 +60,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         require(token != address(0), "Invalid token");
         require(rewardRate > 0, "Reward rate must be > 0");
 
-        poolCount++;
+        poolCount++;      
         pools[poolCount] = FarmPool({
             stakingToken: IERC20(token),
             totalStaked: 0,
