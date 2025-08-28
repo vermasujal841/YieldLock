@@ -13,7 +13,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         uint256 totalAmount;     
         uint256 claimedAmount;   
         uint256 startTime;
-        uint256 cliff;
+        uint256 cliff;    
         uint256 duration;
         bool isActive;
     }
