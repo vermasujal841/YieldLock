@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YieldLock - Locked Yield Farming</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>🔒 YieldLock</h1>
+                    <p>Locked Yield Farming Protocol</p>
+                </div>
+                <div class="wallet-section">
+                    <button id="connectWallet" class="btn btn-primary">Connect Wallet</button>
+                    <div id="walletInfo" class="wallet-info" style="display: none;">
+                        <span id="walletAddress"></span>
+                        <span id="walletBalance"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Farm Pools Section -->
+            <section class="section">
+                <h2>🌾 Active Farm Pools</h2>
+                <div id="farmPools" class="farm-grid">
+                    <div class="farm-card">
+                        <div class="farm-header">
+                            <h3>ETH/USDC LP</h3>
+                            <span class="apy-badge">120% APY</span>
+                        </div>
+                        <div class="farm-stats">
+                            <div class="stat">
+                                <span class="label">Lock Period:</span>
+                                <span class="value">30 days</span>
+                            </div>
+                            <div class="stat">
+                                <span class="label">Total Staked:</span>
+                                <span class="value">1,250.5 LP</span>
+                            </div>
+                            <div class="stat">
+                                <span class="label">Reward Rate:</span>
+                                <span class="value">0.5 YLD/day</span>
+                            </div>
+                        </div>
+                        <div class="farm-actions">
+                            <input type="number" placeholder="Amount to stake" class="stake-input" data-pool="0">
+                            <button class="btn btn-success stake-btn" data-pool="0">Stake LP Tokens</button>
+                        </div>
+                    </div>
+
+                    <div class="farm-card">
+                        <div class="farm-header">
+                            <h3>BTC/ETH LP</h3>
+                            <span class="apy-badge">95% APY</span>
+                        </div>
+                        <div class="farm-stats">
+                            <div class="stat">
+                                <span class="label">Lock Period:</span>
+                                <span class="value">60 days</span>
+                            </div>
+                            <div class="stat">
+                                <span class="label">Total Staked:</span>
+                                <span class="value">892.3 LP</span>
+                            </div>
+                            <div class="stat">
+                                <span class="label">Reward Rate:</span>
+                                <span class="value">0.3 YLD/day</span>
+                            </div>
+                        </div>
+                        <div class="farm-actions">
+                            <input type="number" placeholder="Amount to stake" class="stake-input" data-pool="1">
+                            <button class="btn btn-success stake-btn" data-pool="1">Stake LP Tokens</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- User Portfolio Section -->
+            <section class="section">
+                <h2>📊 Your Portfolio</h2>
+                <div class="portfolio-grid">
+                    <div class="portfolio-card">
+                        <h3>Active Stakes</h3>
+                        <div id="userStakes" class="stakes-list">
+                            <div class="stake-item">
+                                <div class="stake-info">
+                                    <span class="pool-name">ETH/USDC LP</span>
+                                    <span class="stake-amount">100.0 LP</span>
+                                </div>
+                                <div class="stake-details">
+                                    <div class="detail">
+                                        <span class="label">Locked Until:</span>
+                                        <span class="value unlock-date">2024-04-15</span>
+                                    </div>
+                                    <div class="detail">
+                                        <span class="label">Earned Rewards:</span>
+                                        <span class="value">25.5 YLD</span>
+                                    </div>
+                                </div>
+                                <div class="stake-actions">
+                                    <button class="btn btn-secondary claim-btn" data-stake="0">Claim Rewards</button>
+                                    <button class="btn btn-warning unstake-btn" data-stake="0" disabled>Unstake (Locked)</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="portfolio-card">
+                        <h3>Vesting Schedule</h3>
+                        <div class="vesting-info">
+                            <div class="vesting-item">
+                                <div class="vesting-header">
+                                    <span class="pool-name">ETH/USDC LP Rewards</span>
+                                    <span class="vesting-progress">65% Vested</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 65%;"></div>
+                                </div>
+                                <div class="vesting-details">
+                                    <span>16.25 YLD Available | 8.75 YLD Pending</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Protocol Stats Section -->
+            <section class="section">
+                <h2>📈 Protocol Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🔒</div>
+                        <div class="stat-content">
+                            <h3>Total Value Locked</h3>
+                            <p class="stat-value">$2,450,000</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-content">
+                            <h3>Active Farmers</h3>
+                            <p class="stat-value">1,250</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🎁</div>
+                        <div class="stat-content">
+                            <h3>Rewards Distributed</h3>
+                            <p class="stat-value">125,000 YLD</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⏰</div>
+                        <div class="stat-content">
+                            <h3>Average Lock Time</h3>
+                            <p class="stat-value">45 days</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Admin Panel (hidden by default) -->
+            <section id="adminPanel" class="section admin-panel" style="display: none;">
+                <h2>⚙️ Admin Controls</h2>
+                <div class="admin-grid">
+                    <div class="admin-card">
+                        <h3>Create New Pool</h3>
+                        <div class="form-group">
+                            <input type="text" id="lpTokenAddress" placeholder="LP Token Address" class="form-input">
+                            <input type="number" id="rewardRate" placeholder="Reward Rate" class="form-input">
+                            <input type="number" id="lockDuration" placeholder="Lock Duration (days)" class="form-input">
+                            <button id="createPoolBtn" class="btn btn-primary">Create Pool</button>
+                        </div>
+                    </div>
+                    <div class="admin-card">
+                        <h3>Pool Management</h3>
+                        <div class="form-group">
+                            <select id="poolSelect" class="form-input">
+                                <option value="">Select Pool</option>
+                                <option value="0">Pool 0 - ETH/USDC</option>
+                                <option value="1">Pool 1 - BTC/ETH</option>
+                            </select>
+                            <button id="pausePoolBtn" class="btn btn-warning">Pause Pool</button>
+                            <button id="unpausePoolBtn" class="btn btn-success">Unpause Pool</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>&copy; 2024 YieldLock Protocol. Building sustainable DeFi through locked yield farming.</p>
+                <div class="footer-links">
+                    <a href="#" class="footer-link">Documentation</a>
+                    <a href="#" class="footer-link">Discord</a>
+                    <a href="#" class="footer-link">Twitter</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="spinner"></div>
+            <p>Processing transaction...</p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
