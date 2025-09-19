@@ -53,7 +53,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         stakingToken = IERC20(_stakingToken);
         rewardToken = IERC20(_rewardToken);
     }
-
+        
     // --- Pool Management ---
 
     function createPool(address token, uint256 rewardRate, uint256 lockDuration) external onlyOwner {
