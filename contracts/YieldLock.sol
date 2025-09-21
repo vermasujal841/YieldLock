@@ -57,7 +57,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         
     // --- Pool Management ---
 
-    function createPool(address token, uint256 rewardRate, uint256 lockDuration) external onlyOwner {
+       function createPool(address token, uint256 rewardRate, uint256 lockDuration) external onlyOwner {
         require(token != address(0), "Invalid token");
         require(rewardRate > 0, "Reward rate must be > 0");
 
