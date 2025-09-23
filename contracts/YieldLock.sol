@@ -17,9 +17,9 @@ contract YieldLock is ReentrancyGuard, Ownable {
         uint256 duration;
             bool isActive;
     }
+          
 
-
-    struct FarmPool {
+    struct     FarmPool {
         IERC20 stakingToken;
         uint256 totalStaked;
         uint256 rewardRate;
