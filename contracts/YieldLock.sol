@@ -85,7 +85,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         pool.lockDuration = newLock;
     }
 
-    // --- Staking ---
+         
 
     function stake(uint256 poolId, uint256 amount) external nonReentrant {
         require(amount > 0, "Stake amount must be > 0");
