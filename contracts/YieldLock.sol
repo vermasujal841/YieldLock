@@ -28,7 +28,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         uint256 lockDuration;
           bool isActive;
     }
-   
+         
     struct UserStake {
         uint256 stakedAmount;
         uint256 rewardDebt;
