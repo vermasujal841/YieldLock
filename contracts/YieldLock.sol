@@ -15,7 +15,7 @@ contract YieldLock is ReentrancyGuard, Ownable {
         uint256 cliff;    
         uint256 duration;
             bool isActive;
-    }
+    }.  
           
 
     struct     FarmPool {
