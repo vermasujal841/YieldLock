@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
         uint256 cliff;    
         uint256 duration;
             bool isActive;
-    }.  
+    }.     
           
 
     struct     FarmPool {
