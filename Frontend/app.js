@@ -1,4 +1,4 @@
-// YieldLock Frontend Application
+    // YieldLock Frontend Application
 class YieldLockApp {
     constructor() {
         // Contract configuration
