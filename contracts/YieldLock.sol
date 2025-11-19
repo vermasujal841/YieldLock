@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardToken;
         
-    struct VestingSchedule {
+      struct VestingSchedule {
         uint256 totalAmount;     
         uint256 claimedAmount;   
         uint256 startTime;
